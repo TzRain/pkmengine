@@ -69,7 +69,9 @@
 
 ### Regression Tests
 
-When debugging a specific regression test, remove the logic from the final `catch` block of the `play` function in [`integration.ts`](../src/test/integration.ts) preventing replays from generating the [`logs/pkmn.html`](../logs/pkmn.html) and [`logs/showdown.html`](../logs/showdown.html) UIs:
+When debugging a specific regression test, remove the logic from the final `catch` block of the
+`play` function in [`integration.ts`](../src/test/integration.ts) preventing replays from generating
+the [`logs/pkmn.html`](../logs/pkmn.html) and [`logs/showdown.html`](../logs/showdown.html) UIs:
 
  ```diff
 -if (!replay) {
@@ -108,11 +110,13 @@ Modify `patch.battle` within [`showdown.ts`](../src/test/showdown.ts):
  +   };
  battle.trunc = battle.dex.trunc.bind(battle.dex);
 ```
-After you have determined the problematic effects which speed tie you can assign them a priority in `patch.generation`.
+After you have determined the problematic effects which speed tie you can assign them a priority in
+`patch.generation`.
 
 #### Mismatched seeds
 
-You can determine RNG advances in the engine by modifying the `Gen56` RNG within [`rng.zig`](src/lib/common/rng.zig) to log:
+You can determine RNG advances in the engine by modifying the `Gen56` RNG within
+[`rng.zig`](src/lib/common/rng.zig) to log:
 
 ```patch
 pub fn advance(self: *Gen56) void {
@@ -134,7 +138,10 @@ pub const Rolls = struct {
 
 ## Testing `pkmn-debug`
 
-apply patch to force a fuzz test failure to get input to feed into it:
+The `pkmn-debug` script requires some additional work to test properly because of how it is
+packaged. First you must apply a patch to force a fuzz test failure (and to remove the embedded
+seed) in order to get some input to feed into it:
+
 ```diff
 diff --git a/src/test/fuzz.ts b/src/test/fuzz.ts
 index 462f9bce..d0c02636 100644
@@ -172,7 +179,8 @@ index ff67b3e1..edf88aa3 100644
      std.debug.assert(!showdown or result.type != .Error);
 ```
 
-grab the input, build the package, attempt to run the script
+You then must compile and pack the script before running it in isolation with `npm` to prove that
+it will work correctly when installed by an end user:
 
 ```sh
 $ npm run fuzz pkmn 1 1s 0x12345678 && mv logs/fuzz.html /tmp/log.pkmn
@@ -182,6 +190,8 @@ $ open debug.html
 ```
 
 ## Converting Unit Tests
+
+The following template can be used within JS Pokémon Showdown behavior test cases for a new effect:
 
 <details><summary><b>JS</b></summary>
 
@@ -206,6 +216,9 @@ test('TODO', () => {
 ```
 
 </details>
+
+The corresponding Zig template is as follows, with additional snippets that can be copied depending
+on the scenario:
 
 <details><summary><b>Zig</b></summary>
 
@@ -322,6 +335,9 @@ try t.log.expected.damage(P1.ident(1), t.expected.p1.get(1), .None);
 ```
 
 </details>
+
+The following script can be used sloppily convert Pokémon Showdown text logs into logs suitable for
+Zig behavior testing:
 
 <details><summary><b>parse.js</b></summary>
 
