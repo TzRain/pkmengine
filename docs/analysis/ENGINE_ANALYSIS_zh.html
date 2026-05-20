@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>pkmn/engine 代码库可视化解读</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #1a2128;
+    --panel2: #232b34;
+    --text: #e6edf3;
+    --muted: #9aa6b2;
+    --accent: #58a6ff;
+    --accent2: #ffa657;
+    --good: #56d364;
+    --warn: #f0883e;
+    --bad: #f85149;
+    --border: #30363d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    line-height: 1.65;
+  }
+  header {
+    padding: 32px 40px;
+    background: linear-gradient(135deg, #1f6feb22, #ff7b7222);
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0 0 8px; font-size: 28px; }
+  header p { margin: 4px 0; color: var(--muted); }
+  main { padding: 24px 40px 80px; max-width: 1280px; margin: 0 auto; }
+  section { margin-bottom: 48px; }
+  h2 {
+    font-size: 22px;
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+    margin: 32px 0 16px;
+  }
+  h3 { font-size: 17px; color: var(--accent2); margin-top: 24px; }
+  code, .mono {
+    font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+    background: #00000033;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.92em;
+  }
+  pre {
+    background: #0d1117;
+    padding: 12px 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .card h4 { margin: 0 0 6px; color: var(--accent); font-size: 15px; }
+  .card .size { float: right; color: var(--muted); font-size: 12px; font-weight: normal; }
+  .card p { margin: 4px 0; color: var(--muted); font-size: 13px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel);
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 8px 0;
+    font-size: 13.5px;
+  }
+  th, td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { background: var(--panel2); color: var(--accent2); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 12px 0;
+  }
+  .pl-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .pl-step {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  .pl-step.entry { border-left-color: var(--good); }
+  .pl-step.effect { border-left-color: var(--accent2); }
+  .pl-step.exit { border-left-color: var(--bad); }
+  .pl-step b { color: var(--text); }
+  .pl-step .src { color: var(--muted); font-size: 11px; font-family: monospace; }
+  .arrow { text-align: center; color: var(--muted); font-size: 18px; }
+  .layer {
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin: 8px 0;
+    background: var(--panel);
+    border-left: 5px solid var(--accent);
+  }
+  .layer.l1 { border-left-color: #79c0ff; }
+  .layer.l2 { border-left-color: #d2a8ff; }
+  .layer.l3 { border-left-color: #ffa657; }
+  .layer.l4 { border-left-color: #7ee787; }
+  .layer.l5 { border-left-color: #f85149; }
+  .layer h4 { margin: 0 0 4px; font-size: 14px; }
+  .layer p { margin: 0; color: var(--muted); font-size: 13px; }
+  .badge {
+    display: inline-block;
+    background: var(--accent);
+    color: #0d1117;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 8px;
+    border-radius: 10px;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+  .badge.gray { background: #444c56; color: var(--text); }
+  .badge.orange { background: var(--accent2); color: #0d1117; }
+  .badge.green { background: var(--good); color: #0d1117; }
+  .badge.red { background: var(--bad); color: #fff; }
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .compare .col {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+  }
+  .compare .col.ps { border-top: 3px solid #d2a8ff; }
+  .compare .col.pkmn { border-top: 3px solid #79c0ff; }
+  .tag {
+    display: inline-block;
+    background: #00000044;
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    margin: 2px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .tree {
+    font-family: "JetBrains Mono", monospace;
+    background: #0d1117;
+    padding: 14px 18px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-size: 12.5px;
+    line-height: 1.65;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .tree .dir { color: var(--accent); }
+  .tree .important { color: var(--accent2); font-weight: 600; }
+  .tree .note { color: var(--muted); }
+  details { background: var(--panel); border: 1px solid var(--border);
+            border-radius: 8px; padding: 12px 16px; margin: 8px 0; }
+  details summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+  details[open] summary { margin-bottom: 8px; }
+  .toc { background: var(--panel2); padding: 12px 18px; border-radius: 8px;
+         border: 1px solid var(--border); margin-bottom: 24px; }
+  .toc a { color: var(--accent); text-decoration: none; margin-right: 16px;
+           display: inline-block; padding: 2px 0; }
+  .toc a:hover { text-decoration: underline; }
+  .footer { color: var(--muted); text-align: center;
+            padding: 24px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🎮 pkmn/engine — 代码库可视化解读</h1>
+  <p>面向"游戏引擎设计零基础"读者 · 高层视角 · 含 3 个实战示例 · 配套迁移至洛克王国类游戏的指南</p>
+  <p>仓库：<code>TzRain/pkmengine</code>（fork of <code>pkmn/engine</code>） · 同目录有完整 Markdown 版：<code>ENGINE_ANALYSIS_zh.md</code></p>
+</header>
+
+<main>
+
+<div class="toc">
+  <strong>目录：</strong>
+  <a href="#what">① 这是什么</a>
+  <a href="#tree">② 目录结构</a>
+  <a href="#entities">③ 核心抽象与实体</a>
+  <a href="#effects">④ 招式/道具/特性的实现</a>
+  <a href="#loop">⑤ 主循环</a>
+  <a href="#cases">⑥ 三个实战示例</a>
+  <a href="#luoke">⑦ 给洛克王国造引擎</a>
+</div>
+
+<!-- ============================================================ -->
+<section id="what">
+<h2>① 这是个什么项目？</h2>
+<p><b>pkmn/engine 是一个宝可梦对战模拟器的底层引擎。</b> 它<u>不是</u>一个完整的游戏——不渲染画面、不连服、不管账号。它只做一件事：</p>
+<blockquote style="border-left: 4px solid var(--accent2); padding-left: 16px; color: var(--text); background: var(--panel); margin: 0; padding: 12px 20px; border-radius: 6px;">
+吃下"两方训练家的选择" → 推进战斗状态 → 输出胜负与日志。<br>
+要做到与原版 GB 卡带和 Pokémon Showdown <b>逐帧一致</b>，并且<b>比 Showdown 快 1000 倍以上</b>。
+</blockquote>
+
+<div class="grid" style="margin-top:16px;">
+  <div class="card"><h4>核心实现</h4><p>Zig (<code>src/lib</code>) → 编译为 <code>libpkmn.so</code> / WASM</p></div>
+  <div class="card"><h4>驱动代码</h4><p>TypeScript (<code>src/pkg</code>) → npm 包 <code>@pkmn/engine</code></p></div>
+  <div class="card"><h4>对外接口</h4><p>C ABI (<code>pkmn.h</code>) → 任意语言可绑定</p></div>
+  <div class="card"><h4>设计原则</h4><p><span class="badge orange">No compromises on performance</span> 一切让位于性能</p></div>
+  <div class="card"><h4>当前进度</h4><p>Stage 1：Gen 1 (红蓝) ✓ · Gen 2 (金银) ✓ · 后续：Gen 3/4</p></div>
+  <div class="card"><h4>明确不做</h4><p>队伍校验 / mods / 三打四打 / 输入校验 / UI</p></div>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section id="tree">
+<h2>② 项目目录速览</h2>
+<div class="tree">pkmengine/
+├── <span class="dir">docs/</span>                          <span class="note"># 设计文档：DESIGN.md / PROTOCOL.md / TESTING.md</span>
+├── <span class="dir">examples/</span>                      <span class="note"># C / JS / Zig 三套使用示例</span>
+└── <span class="dir">src/</span>
+    ├── <span class="dir">include/pkmn.h</span>             <span class="note"># 对外的 C 头文件（FFI 边界）</span>
+    ├── <span class="dir">lib/</span>                       <span class="important"># ★ 引擎核心 (Zig)</span>
+    │   ├── pkmn.zig                <span class="note"># 库总入口</span>
+    │   ├── c.zig / node.zig / wasm.zig   <span class="note"># 三种外部绑定</span>
+    │   ├── <span class="dir">common/</span>                <span class="note"># 跨世代共享：data / protocol / rng / options...</span>
+    │   ├── <span class="dir">gen1/</span>                  <span class="important"># 第一世代（独立实现）</span>
+    │   │   ├── data.zig            <span class="note"># Battle/Side/Pokemon/ActivePokemon 等结构体</span>
+    │   │   ├── <span class="dir">data/</span>              <span class="note"># 静态数据表（moves / species / types）</span>
+    │   │   ├── mechanics.zig       <span class="important"># ★ 战斗主流程（3000+ 行的"大脑"）</span>
+    │   │   ├── chance.zig          <span class="note"># RNG 事件追踪（AI 用）</span>
+    │   │   ├── calc.zig            <span class="note"># 伤害计算覆写（calculator 用）</span>
+    │   │   └── helpers.zig         <span class="note"># 构造便捷器</span>
+    │   └── <span class="dir">gen2/</span>                  <span class="note"># 第二世代（独立实现，引入 Item）</span>
+    ├── <span class="dir">pkg/</span>                       <span class="note"># TS 驱动代码</span>
+    ├── <span class="dir">data/</span>                      <span class="note"># JSON dump，供其它语言绑定参考</span>
+    └── <span class="dir">tools/</span>                     <span class="note"># 代码生成器（自动生成 moves.zig / species.zig）</span>
+</div>
+
+<p><b>三个最关键的设计决定：</b></p>
+<ul>
+  <li><span class="badge">1</span> <b>每个世代独立实现</b>——不像 Showdown 那样"一份现代代码 + mods"。代价是代码重复，好处是每代都极简极快。</li>
+  <li><span class="badge">2</span> <b>静态数据由代码生成</b>——<code>tools/generate</code> 生成 <code>data/moves.zig</code>，运行时直接数组下标访问，0 hash 查找。</li>
+  <li><span class="badge">3</span> <b>无字符串 / 无动态分配 / 无指针</b>——所有 ID 都是 1 字节 enum，所有引用都是数组下标 ("handle"）。</li>
+</ul>
+</section>
+
+<!-- ============================================================ -->
+<section id="entities">
+<h2>③ 引擎中的核心抽象与实体</h2>
+
+<h3>3.1 数据实体（"名词"）</h3>
+<p>整场战斗的全部状态总共 <b>384 字节</b>——可以直接 <code>memcpy</code> 存档/读档/并行复制。</p>
+<div class="grid">
+  <div class="card">
+    <h4>Battle <span class="size">384 B</span></h4>
+    <p>一场战斗的全部状态：两个 <code>Side</code> + 回合数 + RNG 状态 + 上一次伤害值。</p>
+  </div>
+  <div class="card">
+    <h4>Side <span class="size">184 B</span></h4>
+    <p>一方训练家：6 只 <code>Pokemon</code> + 出场 <code>ActivePokemon</code> + 顺序 + 上一招。</p>
+  </div>
+  <div class="card">
+    <h4>Pokemon <span class="size">24 B</span></h4>
+    <p><b>未出场</b>态：原始能力值、4 个 <code>MoveSlot</code>、HP、Status、种族、类型、等级。</p>
+  </div>
+  <div class="card">
+    <h4>ActivePokemon <span class="size">32 B</span></h4>
+    <p><b>出场中</b>态：修改后能力值、当前种族（变身用）、当前类型、能力等级、<code>Volatiles</code>、招式槽。</p>
+  </div>
+  <div class="card">
+    <h4>MoveSlot <span class="size">2 B</span></h4>
+    <p><code>{ 招式 ID, 剩余 PP }</code>，每只宝可梦 4 个。</p>
+  </div>
+  <div class="card">
+    <h4>Volatiles <span class="size">位字段</span></h4>
+    <p>临时状态：混乱 / 束缚 / 替身 / 屯能 / 变身 / 麻痹回合数 / Toxic 计数...</p>
+  </div>
+  <div class="card">
+    <h4>Status <span class="size">1 B</span></h4>
+    <p>主状态 enum：SLP / PSN / BRN / FRZ / PAR</p>
+  </div>
+  <div class="card">
+    <h4>Choice <span class="size">1 B</span></h4>
+    <p>玩家指令：<code>{type, data}</code>，type ∈ {Pass, Move, Switch}</p>
+  </div>
+  <div class="card">
+    <h4>Result <span class="size">1 B</span></h4>
+    <p><code>update</code> 返回：胜/负/平/继续 + 下一步可选指令类型。</p>
+  </div>
+  <div class="card">
+    <h4>ID <span class="size">1 B</span></h4>
+    <p>场上某只宝可梦的引用：<code>{player, slot}</code> 压成 8 位。</p>
+  </div>
+</div>
+
+<p style="margin-top:16px;"><b>关键：</b> <code>Pokemon</code> 和 <code>ActivePokemon</code> 是<b>两个不同的结构</b>。"存档态"和"战斗态"分开存，让最热的字段紧凑放在一起，最大化 CPU cache 命中率。</p>
+
+<h3>3.2 静态数据（"图鉴"，每个世代的不变规则）</h3>
+<table>
+  <thead><tr><th>静态数据</th><th>文件</th><th>形态</th></tr></thead>
+  <tbody>
+    <tr><td><code>Move</code> enum + <code>Move.Data</code></td><td><code>gen1/data/moves.zig</code></td><td>165 个枚举 + 同长度的 4 字节数据数组 <code>{effect, bp, accuracy, type, target}</code></td></tr>
+    <tr><td><code>Species</code> + <code>Stats</code></td><td><code>gen1/data/species.zig</code></td><td>151 只宝可梦的基础种族值、类型</td></tr>
+    <tr><td><code>Type</code> + 相克表</td><td><code>gen1/data/types.zig</code></td><td>15 种属性 + 相克矩阵</td></tr>
+    <tr><td><code>Item</code>（Gen 2 起）</td><td><code>gen2/data/items.zig</code></td><td>持有道具枚举（薄荷、莓果、Leftovers…）</td></tr>
+  </tbody>
+</table>
+
+<h3>3.3 行为抽象（"动词"，全在 <code>mechanics.zig</code>）</h3>
+<table>
+  <thead><tr><th>抽象</th><th>函数</th><th>作用</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge green">入口</span></td><td><code>update(c1, c2)</code></td><td>整个引擎<b>唯一</b>对外动作：吃两边指令，前进一回合</td></tr>
+    <tr><td><span class="badge green">入口</span></td><td><code>choices(player, result)</code></td><td>给定当前 result，列出该玩家能选的所有合法指令</td></tr>
+    <tr><td>内部</td><td><code>turnOrder</code></td><td>比较速度+优先度，决定本回合谁先动</td></tr>
+    <tr><td>内部</td><td><code>executeMove</code></td><td>一方完整出招的流水线入口</td></tr>
+    <tr><td>内部</td><td><code>beforeMove</code></td><td>麻痹/睡眠/冰冻/混乱/退缩判定</td></tr>
+    <tr><td>内部</td><td><code>calcDamage / adjustDamage / randomizeDamage</code></td><td>三段式伤害计算</td></tr>
+    <tr><td>内部</td><td><code>checkHit / moveHit</code></td><td>命中判定</td></tr>
+    <tr><td>内部</td><td><code>applyDamage</code></td><td>扣 HP / 处理替身吸收</td></tr>
+    <tr><td><span class="badge orange">★</span></td><td><code>moveEffect</code> + <code>Effects.*</code></td><td><b>招式副作用的 dispatch 与实现</b>（详见 §4）</td></tr>
+    <tr><td>内部</td><td><code>handleResidual</code></td><td>回合末：中毒/烧伤/Leech Seed 残留伤害</td></tr>
+    <tr><td>内部</td><td><code>endTurn</code></td><td>收尾：检查胜负 → 写日志 → 返回 Result</td></tr>
+  </tbody>
+</table>
+
+<h3>3.4 跨切面抽象（可选编译模块）</h3>
+<table>
+  <thead><tr><th>模块</th><th>编译开关</th><th>作用</th></tr></thead>
+  <tbody>
+    <tr><td><b>PRNG</b></td><td>—</td><td>抽象 RNG。默认卡带 RNG；<code>-Dshowdown</code> 切到 Showdown RNG；测试用 <code>FixedRNG</code> 强制指定每次掷骰</td></tr>
+    <tr><td><b>Log / Protocol</b></td><td><code>-Dlog</code></td><td>可选的二进制日志输出。关闭时整条日志代码被编译器消除</td></tr>
+    <tr><td><b>Chance</b></td><td><code>-Dchance</code></td><td>记录本次 update 发生了哪些 RNG 事件，供 AI 重放/搜索</td></tr>
+    <tr><td><b>Calc</b></td><td><code>-Dcalc</code></td><td>允许覆写伤害结果，做伤害计算器</td></tr>
+  </tbody>
+</table>
+<p>这四个模块都用 <b>Null Object Pattern</b>——没启用时占 0 字节，所有调用编译期消除。</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="effects">
+<h2>④ 招式 / 道具 / 特性的"效果"是怎么实现的？</h2>
+<p>这是<b>最关键</b>的设计点。引擎采用 <b>"枚举 + dispatch"</b> 模式，而不是 OOP 的"每个招式一个 class"。</p>
+
+<h3>4.1 招式的数据结构</h3>
+<p>每个招式就是<b>一行 4 字节静态数据</b>，没有任何代码：</p>
+<pre>// gen1/data/moves.zig
+pub const Data = packed struct(u32) {
+    effect: Effect,     // 1 字节：副作用类别
+    bp: u8,             // 威力
+    accuracy: u8,       // 命中
+    type: Type,         // 属性
+    target: Target,     // 目标
+};
+
+// 示例：火焰喷射
+.{ .effect = .BurnChance1, .bp = 95, .type = .Fire,
+   .accuracy = percent(100), .target = .Other },</pre>
+
+<p>很多招式<b>共用同一个 effect</b>——"火焰喷射 / 火花 / 喷射火焰" 都是 <code>.BurnChance1</code>，只是威力/命中不同。这就极大地压缩了代码量。</p>
+
+<h3>4.2 effect 是怎么被触发的？</h3>
+<p><code>Effect</code> 枚举的<b>顺序是有意安排的</b>——前 16 个是 onBegin 类、17–31 是 onEnd 类，依此类推。这样可以用整数比较快速分类：</p>
+<pre>pub fn onBegin(effect: Effect) bool {
+    return @intFromEnum(effect) > 0 and @intFromEnum(effect) <= 16;
+}</pre>
+
+<p>在主流水线的对应节点，做一次大 switch 分发：</p>
+<pre>fn moveEffect(battle, player, move, options) !void {
+    return switch (move.effect) {
+        .BurnChance1, .BurnChance2  =&gt; Effects.burnChance(...),
+        .ConfusionChance            =&gt; Effects.confusion(...),
+        .FlinchChance1, .FlinchChance2 =&gt; Effects.flinchChance(...),
+        .FreezeChance               =&gt; Effects.freezeChance(...),
+        .HyperBeam                  =&gt; Effects.hyperBeam(...),
+        .ParalyzeChance1, .ParalyzeChance2 =&gt; Effects.paralyzeChance(...),
+        .PoisonChance1, .PoisonChance2 =&gt; Effects.poison(...),
+        .AttackDownChance, .DefenseDownChance, .SpecialDownChance,
+        .SpeedDownChance            =&gt; Effects.unboost(...),
+        else =&gt; {},
+    };
+}</pre>
+
+<p><code>Effects</code> 是一个<b>纯函数命名空间</b>（<code>pub const Effects = struct { fn burnChance(...){} ... }</code>），每种效果一个函数，直接操纵 <code>battle/side/active.volatiles</code> 等字段。</p>
+
+<h3>4.3 道具与特性</h3>
+<ul>
+  <li><b>道具</b>：Gen 2 起 <code>Pokemon</code> 多了 <code>item: Item</code> 字段，1 字节 enum。在 <code>gen2/mechanics.zig</code> 的不同时机以同样的 switch dispatch 生效（Quick Claw 优先度、Leftovers 回血、Berry 解状态、King's Rock 退缩…）。</li>
+  <li><b>特性</b>：Gen 1/2 没有此概念。但未来引入时也会是同样模式：1 字节 <code>Ability</code> enum + 各事件钩子点 switch dispatch。</li>
+</ul>
+
+<h3>4.4 与 Pokémon Showdown 对比</h3>
+<div class="compare">
+  <div class="col ps">
+    <h4 style="color:#d2a8ff; margin-top:0;">Pokémon Showdown（事件系统）</h4>
+    <p>每个招式 = 一个 JS 对象，带 <code>onTryHit</code>, <code>onModifyMove</code>, <code>secondary</code> 等回调钩子。</p>
+    <p>派发方式：<b>事件冒泡</b>，遍历招式/精灵/场地/道具/特性查找处理器。</p>
+    <p>扩展性<span class="badge green">极强</span> 几小时就能加新世代；性能<span class="badge red">慢</span></p>
+  </div>
+  <div class="col pkmn">
+    <h4 style="color:#79c0ff; margin-top:0;">pkmn/engine（switch dispatch）</h4>
+    <p>每个招式 = 一行 4 字节数据 + 一个 <code>Effect</code> enum 标签。</p>
+    <p>派发方式：<b>固定流水线节点</b>上做一次 <code>switch</code>，编译成跳转表。</p>
+    <p>扩展性<span class="badge red">极弱</span> 每个世代都要手写；性能<span class="badge green">极快</span></p>
+  </div>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section id="loop">
+<h2>⑤ 整个引擎是怎么"跑"起来的？</h2>
+<p>无论用什么语言写驱动，调用模式永远是同一个循环：</p>
+
+<div class="pipeline">
+  <div class="pl-row"><div class="pl-step entry"><b>① 构造 Battle</b><br><span class="src">填入两队精灵、招式、HP、PRNG seed</span></div></div>
+  <div class="arrow">↓</div>
+  <div class="pl-row"><div class="pl-step entry"><b>② 首次 update(Pass, Pass)</b><br><span class="src">触发"派出第一只"</span></div></div>
+  <div class="arrow">↓</div>
+  <div class="pl-row">
+    <div class="pl-step"><b>③ result = update(c1, c2)</b><br><span class="src">推进一回合</span></div>
+    <div class="pl-step"><b>④ choices(P1, result.p1)</b><br><span class="src">列出 P1 合法指令</span></div>
+    <div class="pl-step"><b>⑤ choices(P2, result.p2)</b><br><span class="src">列出 P2 合法指令</span></div>
+  </div>
+  <div class="arrow">↓</div>
+  <div class="pl-row"><div class="pl-step effect"><b>⑥ AI/玩家从合法列表里挑指令 → 回到 ③</b></div></div>
+  <div class="arrow">↓</div>
+  <div class="pl-row"><div class="pl-step exit"><b>⑦ result.type ≠ None → 退出</b><br><span class="src">判 Win / Lose / Tie</span></div></div>
+</div>
+
+<p>整个 API 就 <b>2 个函数</b>：<code>update</code> + <code>choices</code>。Battle 整体是 384 字节连续内存——存档/读档/并行 MC 搜索都是直接 memcpy。</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="cases">
+<h2>⑥ 三个实战示例：不同层级如何协作</h2>
+
+<!-- ========= 示例 A ========= -->
+<details open>
+<summary>🔥 示例 A — 用"火焰喷射"打中对面飞行系并附带烧伤</summary>
+
+<div class="pipeline">
+  <div class="pl-row">
+    <div class="pl-step entry">
+      <b>1. 指令层</b> <span class="badge gray">驱动 / 玩家</span><br>
+      提交 <code>Choice{ .type=.Move, .data=1 }</code>（招式槽 1）
+    </div>
+  </div>
+  <div class="arrow">↓</div>
+  <div class="pl-row">
+    <div class="pl-step">
+      <b>2. 流程层</b> <span class="badge gray">mechanics.update</span><br>
+      决定先后手 → <code>doTurn</code> → <code>executeMove</code>
+    </div>
+  </div>
+  <div class="arrow">↓</div>
+  <div class="pl-row">
+    <div class="pl-step">
+      <b>3. 出招前判定</b> <span class="badge gray">beforeMove</span><br>
+      麻痹/睡眠/混乱/退缩 → 都没有 → ok
+    </div>
+  </div>
+  <div class="arrow">↓</div>
+  <div class="pl-row">
+    <div class="pl-step">
+      <b>4. 静态数据查表</b> <span class="badge gray">Move.get(.Flamethrower)</span><br>
+      取出 <code>{effect=BurnChance1, bp=95, type=Fire, accuracy=100%}</code>，O(1) 数组下标
+    </div>
+  </div>
+  <div class="arrow">↓</div>
+  <div class="pl-row">
+    <div class="pl-step">
+      <b>5. 命中判定</b> <span class="badge gray">moveHit + Rolls + PRNG</span><br>
+      抽一次命中骰
+    </div>
+    <div class="pl-step">
+      <b>6. 伤害公式</b> <span class="badge gray">calcDamage</span><br>
+      卡带原版公式：攻防、等级、STAB、暴击
+    </div>
+  </div>
+  <div class="arrow">↓</div>
+  <div class="pl-row">
+    <div class="pl-step">
+      <b>7. 属性相克</b> <span class="badge gray">adjustDamage + types.zig</span><br>
+      火 vs 飞行 = ×1（普通效果）
+    </div>
+    <div class="pl-step">
+      <b>8. 随机扰动</b> <span class="badge gray">randomizeDamage</span><br>
+      217–255/255 范围浮动
+    </div>
+  </div>
+  <div class="arrow">↓</div>
+  <div class="pl-row">
+    <div class="pl-step">
+      <b>9. 扣血</b> <span class="badge gray">applyDamage</span><br>
+      写 <code>foe.stored().hp</code>、<code>battle.last_damage</code>
+    </div>
+  </div>
+  <div class="arrow">↓</div>
+  <div class="pl-row">
+    <div class="pl-step effect">
+      <b>10. 副作用 dispatch</b> <span class="badge orange">★ moveEffect switch</span><br>
+      <code>.BurnChance1 → Effects.burnChance(...)</code>
+    </div>
+  </div>
+  <div class="arrow">↓</div>
+  <div class="pl-row">
+    <div class="pl-step effect">
+      <b>11. 副作用执行</b> <span class="badge orange">Effects.burnChance</span><br>
+      检查替身/已有状态/属性免疫 → 抽副作用骰 → 通过则置 <code>status = BRN</code>，攻击减半
+    </div>
+  </div>
+  <div class="arrow">↓</div>
+  <div class="pl-row">
+    <div class="pl-step">
+      <b>12. 日志层</b> <span class="badge gray">options.log.status</span><br>
+      若 <code>-Dlog</code> 启用：写二进制协议；否则编译期消除
+    </div>
+  </div>
+  <div class="arrow">↓</div>
+  <div class="pl-row">
+    <div class="pl-step exit">
+      <b>13. 回合末</b> <span class="badge gray">handleResidual</span><br>
+      下一回合末，烧伤会扣 1/16 HP
+    </div>
+  </div>
+</div>
+</details>
+
+<!-- ========= 示例 B ========= -->
+<details>
+<summary>🔄 示例 B — 玩家选择换宝可梦</summary>
+
+<table>
+  <thead><tr><th>层级</th><th>谁负责</th><th>做了什么</th></tr></thead>
+  <tbody>
+    <tr><td>合法指令查询</td><td><code>battle.choices(P1, .Switch)</code></td><td>遍历 <code>side.pokemon</code>，HP&gt;0 且非自己 → 写入 <code>Choice{.Switch, slot}</code></td></tr>
+    <tr><td>驱动选择</td><td>用户/AI</td><td>从合法列表里挑一项</td></tr>
+    <tr><td>流程层</td><td><code>selectMove → executeMove</code></td><td>看到 <code>.Switch</code> 类型直接进入 <code>switchIn</code> 分支</td></tr>
+    <tr><td>状态清空</td><td><code>switchIn → clearVolatiles</code></td><td>所有 <code>volatiles</code> 位字段清 0，能力等级清 0</td></tr>
+    <tr><td>激活实体</td><td><code>switchIn</code></td><td>目标 <code>Pokemon</code> 字段拷贝到 <code>ActivePokemon</code>，调整 <code>side.order</code></td></tr>
+    <tr><td>状态修正</td><td><code>statusModify</code></td><td>若中毒/烧伤，按规则调整能力值</td></tr>
+    <tr><td>日志</td><td><code>options.log.switch_</code></td><td>输出 <code>|switch|</code> 协议消息</td></tr>
+  </tbody>
+</table>
+</details>
+
+<!-- ========= 示例 C ========= -->
+<details>
+<summary>💥 示例 C — 触发"屯能(Bide)"：一个多回合持续效果</summary>
+
+<p>这个例子最能展示 <b>Volatiles 位字段 + Effects 函数 + 主流程检查</b> 三者如何形成一个"小型状态机"。</p>
+
+<table>
+  <thead><tr><th>时机</th><th>层级</th><th>做了什么</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>第 N 回合</b> 首次使用 Bide</td>
+      <td><code>Effects.bide</code></td>
+      <td>设置 <code>volatiles.Bide = true</code>、<code>volatiles.state = 0</code>（累计伤害）、<code>volatiles.attacks = 2 或 3</code>（持续回合，PRNG 决定）</td>
+    </tr>
+    <tr>
+      <td>同上</td>
+      <td><code>options.chance.observe(.attacking, ...)</code></td>
+      <td>记录"抽到 2 还是 3"——供 AI 搜索重放</td>
+    </tr>
+    <tr>
+      <td><b>第 N+1 / N+2 回合</b> <code>selectMove</code></td>
+      <td>主流程</td>
+      <td>检测到 <code>volatiles.Bide == true</code> → <b>不让玩家选指令</b>，强制重复 Bide</td>
+    </tr>
+    <tr>
+      <td>被打中时</td>
+      <td><code>applyDamage</code></td>
+      <td>累加进 <code>volatiles.state</code></td>
+    </tr>
+    <tr>
+      <td><code>volatiles.attacks</code> 减到 0</td>
+      <td><code>doMove</code> 释放分支</td>
+      <td>把累计伤害 ×2 砸向对面，清空 Bide 状态</td>
+    </tr>
+  </tbody>
+</table>
+</details>
+
+</section>
+
+<!-- ============================================================ -->
+<section id="luoke">
+<h2>⑦ 如何为洛克王国类游戏做一个类似引擎？</h2>
+
+<p>如果你想给一款国产 PKM 风格对战游戏（洛克王国、赛尔号、口袋妖怪 GO...）做一个 pkmn/engine 级别的高性能对战内核，按下面 7 步走：</p>
+
+<div class="layer l1">
+  <h4>步骤 0：明确"游戏战斗规则"边界</h4>
+  <p>写一份规则文档，详细列出：战斗格式（1v1?2v2?）、指令系统、属性相克、能力值公式、招式属性（物理/法术/变化、PP、目标、优先度、特效）、状态系统、特性/个性、道具/法宝、场地/天气/五行/缘分、RNG 在哪里发生……<b>规则冻结后再设计数据结构</b>。pkmn/engine 能这么小这么快的根本原因，就是它实现的是<b>完全冻结的、不再变化的</b>规则集合。</p>
+</div>
+
+<div class="layer l2">
+  <h4>步骤 1：定义"最小完备"的状态结构</h4>
+  <p>参照 <code>gen1/data.zig</code> 定义你的：<code>Battle / Side / Pet / ActivePet / SkillSlot / Volatiles / Choice / Result</code>。
+  设计原则：① 全部状态打包成一个<b>定长</b>结构（可 memcpy）；② 不用指针，用整数下标当 handle；③ 不用字符串，所有 ID 是 enum；④ 冷数据/热数据分离；⑤ 不动态分配，所有缓冲区常量化。</p>
+</div>
+
+<div class="layer l3">
+  <h4>步骤 2：把"图鉴"做成代码生成的静态数据</h4>
+  <p>用 Python/Node 写脚本，从 JSON/Excel/服务器导表读取精灵/技能/道具表，生成目标语言源代码（Zig 的 <code>[_]Data{}</code>、Rust 的 <code>static</code>、C 的 <code>const</code> 数组）。<b>关键</b>：精灵和技能 ID = 数组下标，O(1) 查表，没有 hashmap。</p>
+</div>
+
+<div class="layer l4">
+  <h4>步骤 3：实现主流水线</h4>
+  <p>参照 <code>gen1/mechanics.zig</code> 的骨架：</p>
+  <pre>update(c1, c2)
+  ├─ selectMove(P1, c1)        ← 强制连续招处理
+  ├─ selectMove(P2, c2)
+  ├─ turnOrder(...)             ← 速度 + 优先度
+  └─ doTurn(first, second)
+        ├─ executeMove(first)
+        │     ├─ beforeMove        ← 麻痹/睡眠/混乱
+        │     ├─ canMove           ← PP / Disable
+        │     └─ doMove
+        │           ├─ checkHit
+        │           ├─ calcDamage
+        │           ├─ adjustDamage   ← 相性 + STAB
+        │           ├─ randomizeDamage
+        │           ├─ applyDamage
+        │           └─ moveEffect     ← ★ 副作用 dispatch
+        ├─ checkFaint
+        ├─ executeMove(second)
+        ├─ handleResidual          ← 中毒/烧伤/Leech 末伤
+        └─ endTurn                 ← 写日志 + 返回 Result</pre>
+</div>
+
+<div class="layer l4">
+  <h4>步骤 4：实现"技能效果 / 道具效果 / 特性"</h4>
+  <p>给每种<b>效果类别</b>定义一个 <code>Effect</code> enum 值（不是每个具体技能！多个相似技能共用同一个 effect）。在 <code>Effects</code> 命名空间里给每种 effect 写一个函数，直接操纵 <code>Battle</code> 状态。在主流水线的合适节点（onBegin / onHit / onEnd / onResidual）做 <code>switch (effect)</code> 分发。</p>
+  <p>如果你的游戏有"特性 / 缘分 / 五行"等会影响<b>多种事件</b>的机制，有两种选择：</p>
+  <ul>
+    <li><span class="badge">A</span> <b>像 pkmn/engine 一样硬编码</b>：每个事件点 switch 里加 if-特性 → 快但代码丑</li>
+    <li><span class="badge">B</span> <b>像 Showdown 一样建事件总线</b>：可扩展、可玩家 mod，但慢</li>
+  </ul>
+  <p>取决于目标：服务器实时对战、AI 训练 → A；玩家可自定义 → B。</p>
+</div>
+
+<div class="layer l5">
+  <h4>步骤 5：RNG / 日志 / 测试</h4>
+  <p><b>RNG 抽象</b>：实现一个 <code>FixedRNG</code>，可强制指定每次抽签结果——单元测试和 AI 重放的基石。
+  <b>二进制 protocol</b>：定义一套字节码（<code>|switch|</code> / <code>|move|</code> / <code>|damage|</code>...）作为可选编译开关。
+  <b>集成测试</b>：跑大量 fixture 战斗，对比"参考实现"（你的服务器现有代码）的逐回合输出。
+  <b>基准测试</b>：用 <code>zig build benchmark</code> 这样的工具持续监控性能回归。</p>
+</div>
+
+<div class="layer l5">
+  <h4>步骤 6：对外绑定</h4>
+  <p><b>C ABI</b>：导出 <code>luoke_battle_update</code> 这样的 C 函数；不暴露内部结构，只暴露不透明 handle。
+  <b>Node / WASM</b>：用 N-API 或 WebAssembly 包一层。
+  <b>驱动层</b>：用 TypeScript/Python 实现易用的高层 API（自动初始化、打印协议、AI 玩家接口）。</p>
+</div>
+</section>
+
+<section>
+<h2>📌 TL;DR 一句话总结</h2>
+<ol>
+  <li>pkmn/engine ≠ 完整游戏，它是一个为极致性能而生的"对战内核库"。</li>
+  <li>每个世代独立硬编码，不抽象成"通用引擎 + 数据"。</li>
+  <li>核心实体只有 5 个：<b>Battle / Side / Pokemon / ActivePokemon / MoveSlot</b>，加上位字段 <b>Volatiles / Status</b>。</li>
+  <li><b>招式没有自己的代码</b>，只有 4 字节数据 + 一个 <code>Effect</code> enum 标签，由 <code>mechanics.zig</code> 的大 switch 分发到 <code>Effects.xxx</code> 函数。</li>
+  <li>道具同理（Gen 2 起），未来的特性会以同样的模式加进去。</li>
+  <li>整个 API 就一对函数：<code>update(c1, c2) → Result</code> 和 <code>choices(player, result) → [Choice]</code>。</li>
+  <li><b>二进制 / 无字符串 / 无分配 / 无指针</b>，是它比 Pokémon Showdown 快 1000 倍的根本原因。</li>
+  <li>想做洛克王国版本：先冻结规则 → 设计紧凑结构体 → 代码生成图鉴 → 实现固定流水线 → 用 enum + switch 实现效果 → 加 RNG 抽象与日志协议 → C ABI 暴露给上层。</li>
+</ol>
+</section>
+
+</main>
+
+<div class="footer">
+  生成于 2026-05-20 · 配套 Markdown：<code>docs/analysis/ENGINE_ANALYSIS_zh.md</code> · 仓库源码：<code>src/lib/gen1/</code>
+</div>
+
+</body>
+</html>
