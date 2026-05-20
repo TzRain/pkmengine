@@ -3,6 +3,8 @@
 > 这份文档面向"没接触过游戏引擎设计"的读者，从 high-level 角度讲解 `pkmn/engine` 这个仓库的整体设计、抽象、实体，并讨论如果想为类似的 PKM 对战游戏（例如《洛克王国》）开发一个对应的引擎，应该怎么做。
 >
 > 配套的可视化页面：[`ENGINE_ANALYSIS_zh.html`](./ENGINE_ANALYSIS_zh.html)
+>
+> **想看 `docs/` 下其它设计文档的中文翻译**（DESIGN / PROTOCOL / TESTING / NOTES / RESEARCH / CONTRIBUTING）：前往 [`docs/zh/`](../zh/README.md)。
 
 ---
 
